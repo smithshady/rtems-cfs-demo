@@ -27,9 +27,9 @@
    #include <machine/rtems-bsd-commands.h>
 #endif
 
-#include <rtems/dhcpcd.h>
+// #include <rtems/dhcpcd.h>
 #include <rtems/console.h>
-#include <rtems/netcmds-config.h>
+// #include <rtems/netcmds-config.h>
 #include <bsp/irq-info.h>
 #include <net/if.h>
 #include <rtems/rtl/dlfcn-shell.h>

@@ -7,8 +7,8 @@
 ##
 ## Paths in the Docker container
 ##
-RTEMS_TOOL_BASE ?= /opt/rtems6
-RTEMS_BSP_BASE ?= /opt/rtems6
+RTEMS_TOOL_BASE ?= /opt/rtems/6
+RTEMS_BSP_BASE ?= /opt/rtems/6
 
 ## Paths I use in my development environment
 ## RTEMS_TOOL_BASE ?= $(HOME)/rtems/tools/6

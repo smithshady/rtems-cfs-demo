@@ -5,6 +5,7 @@
 *.gz
 *.pre
 *.d
+*.bin
 rtems*.img
 *.elf
 tarfile

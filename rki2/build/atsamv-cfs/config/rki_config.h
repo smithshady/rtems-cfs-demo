@@ -52,12 +52,12 @@
 /*
 ** Include libbsd - should not be used wth the old network stack
 */
-#define RKI_INCLUDE_LIBBSD
+#undef RKI_INCLUDE_LIBBSD
 
 /*
 ** start network services. Enable/disable individual services below
 */
-#define RKI_INCLUDE_NETWORK_SERVICES
+#undef RKI_INCLUDE_NETWORK_SERVICES
 
    /*
    ** Include and start the telnetd server
@@ -67,7 +67,7 @@
    /*
    ** Include and start the RTEMS ftp server
    */
-   #define RKI_INCLUDE_FTPSERVER
+   #undef RKI_INCLUDE_FTPSERVER
 
    /*
    ** Include the NFS client

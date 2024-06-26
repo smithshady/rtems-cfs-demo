@@ -10,39 +10,50 @@ ARCH ?= arm-rtems6
 ##
 ## Select your BSP here 
 ##
-BSP ?= beagleboneblack
+BSP ?= atsamv
 
 ##
 ## paths for the RTEMS tools and RTEMS BSP
 ##
 include ../rtems-paths.mak
 
-include config/symbols.mak
-
 ##
 ## Compiler paths
 ##
-PREFIX         = $(RTEMS_TOOL_BASE)
-RTEMS_PREFIX   = $(RTEMS_BSP_BASE)
-RTEMS_ARCH_LIB = $(RTEMS_PREFIX)/$(ARCH)/$(BSP)/lib
+PREFIX          = $(RTEMS_TOOL_BASE)
+RTEMS_PREFIX    = $(RTEMS_BSP_BASE)
+RTEMS_ARCH_LIB  = $(RTEMS_PREFIX)/$(ARCH)/$(BSP)/lib
 RTEMS_ARCH_LIB2 = $(RTEMS_PREFIX)/$(ARCH)/lib
+
+##
+## Paths to cFS artifacts
+##
+CPU_ID=cpu1
+CFS_BUILD_PATH = ../../../cFS/build/exe/$(CPU_ID)
+CFS_APP_BUILD_PATH = $(CFS_BUILD_PATH)/eeprom
+CFE_CORE_OBJ = $(CFS_BUILD_PATH)/core-cpu1.exe
+
+##
+## Path to install cFS artifiacts
+##
+DYNOBJPATH = rootfs/nonvol
 
 ##
 ## Linker flags
 ##
-LDFLAGS ?= -mcpu=cortex-a8 -ffunction-sections -fdata-sections -Wl,--gc-sections
+LDFLAGS ?= -mthumb -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections -Wl,--gc-sections
 LDFLAGS += --pipe -B$(RTEMS_ARCH_LIB2) -B$(RTEMS_ARCH_LIB) -qrtems $(WARNINGS) 
 
 ##
 ## Compiler Architecture Switches
 ##
-ARCH_OPTS ?= -mcpu=cortex-a8 -D__ARM__  
+ARCH_OPTS ?= -mthumb -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -D__ARM__  
 ARCH_OPTS += --pipe -B$(RTEMS_ARCH_LIB2) -B$(RTEMS_ARCH_LIB) -qrtems
 ARCH_OPTS += -DHAVE_DLFCN_H=1 -DHAVE_RTEMS_PCI_H=1
 
 INCLUDE_PATH := -I./config
 
-WARNINGS	= -Wall
+WARNINGS	 = -Wall
 DEBUG_OPTS	 = -g -O2
 
 ##
@@ -57,9 +68,9 @@ LINKSCRIPT       = linkcmds
 BEAGLE_UBOOT     = rtems-rki.img
 
 ##
-## Objects to build
+## Objects to build (removed networking)
 ##
-OBJS = rki_init.o rki_libbsd.o rki_net_svc.o rki_shell_cmds.o rki_dl_cmds.o rki_filesys.o
+OBJS = rki_init.o rki_shell_cmds.o rki_dl_cmds.o rki_filesys.o
 OBJS += target_shell_cmds.o
 
 ##
@@ -77,14 +88,21 @@ OBJS += rki_whetstone_cmd.o
 OBJS += rki_benchmarks.o
 
 #
-# Target specific commands
+# Target specific commands (removed gpio)
 #
-OBJS += gpio_cmd.o
+# OBJS += gpio_cmd.o
+OBJS += rki_cfs_cmd.o
+OBJS += rki_start_cfs.o
 
 ##
-## Libraries to link
+## External Objects (the cFE Core)
 ##
-LIBS = -Wl,-Bstatic -lbsd -Wl,-Bdynamic -lftpd -ltelnetd -lbsd -lm -lz
+EXTOBJS := $(CFE_CORE_OBJ)
+
+##
+## Libraries to link (removed networking)
+##
+LIBS = -Wl,-Bstatic -Wl,-Bdynamic -lftpd -lm -lz
 
 ##
 ## Optional libs depending on the features needed
@@ -128,7 +146,7 @@ LS=ls
 COMPILER   = $(ARCH)-gcc
 ASSEMBLER  = $(ARCH)-gcc
 LINKER	   = $(ARCH)-ld
-AR	   = $(ARCH)-ar
+AR	   	   = $(ARCH)-ar
 NM         = $(ARCH)-nm
 OBJCOPY    = $(ARCH)-objcopy
 SIZE       = $(ARCH)-size
@@ -173,6 +191,9 @@ default::$(EXE_TARGET)
 ## Build Tar image
 ##
 $(TAR_IMAGE)::
+	$(CP) -f  $(CFS_APP_BUILD_PATH)/cfe_es_startup.scr $(DYNOBJPATH)/cfe_es_startup.scr
+	$(CP) -f  $(CFS_APP_BUILD_PATH)/*.obj $(DYNOBJPATH)
+	$(CP) -f  $(CFS_APP_BUILD_PATH)/*.tbl $(DYNOBJPATH)
 	$(CD) rootfs; $(TAR) cf ../tarfile $(shell $(LS) rootfs)
 	$(LINKER) -r --noinhibit-exec -o $(TAR_IMAGE) -b binary tarfile
 
@@ -181,20 +202,28 @@ $(TAR_IMAGE)::
 ## add symtab.o for symbol table
 ##
 $(EXE_TARGET): $(OBJS) $(TAR_IMAGE)
-	$(COMPILER) $(DEBUG_FLAGS) $(LDFLAGS) $(FORCE_SYMBOLS) -o $(EXE_TARGET_PRE) $(OBJS) $(TAR_IMAGE) $(LIBS)
-	$(RTEMS_SYMS) -v -e -c "-mcpu=cortex-a8 -ffunction-sections -fdata-sections -Wl,--gc-sections" -o dl-sym.o $(EXE_TARGET_PRE)
-	$(COMPILER) $(DEBUG_FLAGS) $(LDFLAGS) $(FORCE_SYMBOLS) -o $(EXE_TARGET) $(OBJS) $(TAR_IMAGE) $(LIBS) dl-sym.o
+	$(COMPILER) $(DEBUG_FLAGS) $(LDFLAGS) -o $(EXE_TARGET_PRE) $(OBJS) $(EXTOBJS) $(TAR_IMAGE) $(LIBS)
+	$(RTEMS_SYMS) -v -e -c "-mthumb -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections -Wl,--gc-sections" -o dl-sym.o $(EXE_TARGET_PRE)
+	$(COMPILER) $(DEBUG_FLAGS) $(LDFLAGS) -o $(EXE_TARGET) $(OBJS) $(EXTOBJS) $(TAR_IMAGE) $(LIBS) dl-sym.o
 	$(OBJCOPY) -O binary --strip-all $(EXE_TARGET) $(BINARY_TARGET)
 	$(SIZE) $(EXE_TARGET)
-	gzip -9 $(BINARY_TARGET)
-	mkimage -A arm -O linux -T kernel -a 0x80000000 -e 0x80000000 -n RTEMS -d $(BINARY_TARGET).gz $(BEAGLE_UBOOT)	
+
+# $(OBJCOPY) -O binary $(EXTOBJS) core-cpu1.bin
+# $(OBJCOPY) -I binary -O elf32-littlearm core-cpu1.bin core-cpu1.o
+# gzip -9 $(BINARY_TARGET)
+# mkimage -A arm -O linux -T kernel -a 0x80000000 -e 0x80000000 -n RTEMS -d $(BINARY_TARGET).gz $(BEAGLE_UBOOT)	
 
 ##
 ## Make clean rule
 ##
 clean::
+	-$(RM) $(OBJS) $(EXE_TARGET) $(EXE_TARGET_PRE) $(BINARY_TARGET)
+	-$(RM) $(DYNOBJPATH)/cfe_es_startup.scr
+	-$(RM) $(DYNOBJPATH)/*.tbl
+	-$(RM) $(DYNOBJPATH)/*.obj
 	-$(RM) $(OBJS) $(EXE_TARGET) $(EXE_TARGET_PRE) $(BINARY_TARGET) $(BINARY_TARGET).gz
 	-$(RM) $(TAR_IMAGE) tarfile
+	-$(RM) core-cpu1.bin core-cpu1.o
 	-$(RM) *.lis
 	-$(RM) *.img
 	-$(RM) dl-sym.o
